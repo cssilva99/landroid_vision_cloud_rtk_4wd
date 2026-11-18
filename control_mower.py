@@ -42,7 +42,7 @@ async def main():
 
     print(f"Connected to the device: {mower.name} (Model: {mower.model})")
      
-    print(f"Current Status: {mower.status.description} | Batery: {mower.battery.level}%") | Batery: {mower.battery.percent}%")
+    # print(f"Current Status: {mower.status.description} | Batery: {mower.battery.level}% | Batery: {mower.battery.percent}%")
 
     # Execute commands
     if COMMAND == "status":
