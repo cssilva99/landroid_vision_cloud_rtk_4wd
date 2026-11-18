@@ -17,14 +17,14 @@ async def main():
     cloud = WorxCloud(EMAIL, PASSWORD, "worx")
     
     print("Authenticating in Worx Cloud...")
-    # ATENÇÃO: Adicionado await (se authenticate for async na lib)
+    
     auth = await cloud.authenticate() 
     if not auth:
         print("Fails Authentication. Checks email and password.")
         sys.exit(1)
 
     await cloud.connect()
-    # Aguarda um pouco para receber o payload inicial MQTT de forma assíncrona
+    # Waits to receive inicial MQTT payload (in an assynchronous way)
     await asyncio.sleep(3)
 
     if not cloud.devices:
@@ -41,9 +41,10 @@ async def main():
         mower = cloud.devices[first_key]
 
     print(f"Connected to the device: {mower.name} (Model: {mower.model})")
-    print(f"Current Status: {mower.status.description} | Bateria: {mower.battery.percent}%")
+     
+    print(f"Current Status: {mower.status.description} | Batery: {mower.battery.level}%") | Batery: {mower.battery.percent}%")
 
-    # Execução de comandos (Adicionados os awaits em falta)
+    # Execute commands
     if COMMAND == "status":
         print("Status read-only request. Finished.")
     elif COMMAND == "start":
