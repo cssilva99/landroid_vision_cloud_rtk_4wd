@@ -71,7 +71,38 @@ if summary_file:
         f.write("### 🌿 Estado do Landroid Vision RTK\n\n")
         f.write(f"- **Estado:** {estado_pt}\n")
         f.write(f"- **Bateria:** {bateria_pct}%\n")
-        f.write(f"- **Erro:** {erro_pt}\n")
+        f.write(f"- **Erro:** ")
+        print(f"\n--- Ligado ao dispositivo: {mower.name} (Modelo: {mower.model}) ---")
+        print(f"Número de Série: {mower.serial_number}\n")
+     
+        print("=== PROPRIEDADES DIRETAS DO OBJETO MOWER ===")
+        for attr in dir(mower):
+            if not attr.startswith("_"):
+                try:
+                    val = getattr(mower, attr)
+                    # Ignorar métodos/funções para focar em dados e objetos
+                    if not callable(val):
+                        print(f"  {attr} = {val}")
+                except Exception:
+                    pass
+
+        print("\n=== EXPLORAÇÃO DE SUB-OBJETOS COMUNS ===")
+    
+        # Verificar sub-objetos típicos (como status, battery, etc.)
+        sub_objects = ["status", "battery", "schedules", "raw", "data", "capabilities"]
+        for sub in sub_objects:
+            if hasattr(mower, sub):
+                sub_val = getattr(mower, sub)
+                print(f"\n[Sub-objeto: {sub}] -> {sub_val}")
+                if hasattr(sub_val, "__dict__"):
+                    for sub_attr, sub_v in sub_val.__dict__.items():
+                        print(f"    {sub_attr} = {sub_v}")
+                elif isinstance(sub_val, dict):
+                    for k, v in sub_val.items():
+                        print(f"    {k}: {v}")
+
+        await cloud.disconnect()
+        print("\nDesligado com sucesso.")
 
 if __name__ == "__main__":
     asyncio.run(main())
