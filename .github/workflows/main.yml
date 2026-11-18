@@ -1,0 +1,47 @@
+name: Control Worx Landroid Vision RTK
+
+on:
+  # Permite disparar manualmente no separador "Actions" do GitHub
+  workflow_dispatch:
+    inputs:
+      command:
+        description: 'Comando a enviar para o cortador'
+        required: true
+        default: 'status'
+        type: choice
+        options:
+          - status
+          - start
+          - pause
+          - home
+
+  # Opcional: Descomenta as linhas abaixo para agendar cortes (ex: Segundas e Quintas às 10:00 UTC)
+  # schedule:
+  #   - cron: '0 10 * * 1,4'
+
+jobs:
+  run-mower-command:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Fazer checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar pyworxcloud
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyworxcloud
+
+      - name: Executar comando no Landroid
+        env:
+          WORX_EMAIL: ${{ secrets.WORX_EMAIL }}
+          WORX_PASSWORD: ${{ secrets.WORX_PASSWORD }}
+          WORX_DEVICE_NAME: ${{ secrets.WORX_DEVICE_NAME }}
+          # Se for executado por agendamento (cron), assume 'start'; caso contrário usa o input manual
+          MOWER_COMMAND: ${{ github.event.inputs.command || 'start' }}
+        run: python control_mower.py
