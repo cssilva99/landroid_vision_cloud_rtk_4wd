@@ -3,6 +3,69 @@ import sys
 import asyncio
 from pyworxcloud import WorxCloud
 
+# Dicionário de tradução para as chaves do Landroid
+TRADUCOES_PROPRIEDADES = {
+    "acs_enabled": "Módulo ACS ativado",
+    "api_capabilities": "Capacidades da API",
+    "area_mowed": "Área cortada (m²)",
+    "battery": "Bateria",
+    "cycles": "Ciclos",
+    "total": "Total",
+    "current": "Atual",
+    "reset_at": "Reposição em",
+    "reset_time": "Hora de reposição",
+    "temperature": "Temperatura (°C)",
+    "voltage": "Voltagem (V)",
+    "percent": "Percentagem (%)",
+    "charging": "A carregar",
+    "blade_height_min_cutoff": "Corte mín. altura da lâmina",
+    "blade_height_shift": "Desvio da altura da lâmina",
+    "blades": "Lâminas",
+    "total_on": "Tempo total ligado (min)",
+    "current_on": "Tempo atual ligado (min)",
+    "capabilities": "Capacidades",
+    "capabilities_available": "Capacidades disponíveis",
+    "city": "Localização",
+    "id": "ID",
+    "country_id": "ID do país",
+    "name": "Nome",
+    "latitude": "Latitude",
+    "longitude": "Longitude",
+    "created_at": "Criado em",
+    "updated_at": "Atualizado em",
+    "diagnostic": "Modo de diagnóstico",
+    "error": "Erro",
+    "description": "Descrição",
+}
+
+# Função auxiliar para traduzir booleans ou valores comuns (opcional)
+def traduzir_valor(valor):
+    if valor is True:
+        return "Sim"
+    if valor is False:
+        return "Não"
+    if valor is None:
+        return "N/D"
+    return valor
+
+# Exemplo de como iterar e imprimir as propriedades traduzidas
+print("=== PROPRIEDADES DIRETAS DO OBJETO MOWER ===")
+
+# Supondo que tenho um dicionário ou atributos do objeto (ex: mower.__dict__ ou similar)
+# Se estiver a usar a biblioteca pyworxcloud, podes extrair as propriedades principais:
+propriedades = {
+    "acs_enabled": mower.acs_enabled,
+    "area_mowed": mower.area_mowed,
+    "battery": mower.battery,
+    "charging": mower.battery.get("charging") if isinstance(mower.battery, dict) else None,
+    "error": mower.error,
+    # Adiciona as outras propriedades que pretendes mostrar...
+}
+
+for chave, valor in propriedades.items():
+    nome_pt = TRADUCOES_PROPRIEDADES.get(chave, chave)
+    print(f"  {nome_pt} = {traduzir_valor(valor)}")
+
 EMAIL = os.environ.get("WORX_EMAIL")
 PASSWORD = os.environ.get("WORX_PASSWORD")
 DEVICE_NAME = os.environ.get("WORX_DEVICE_NAME")  # Opcional: caso tenhas mais que um robot
@@ -84,7 +147,7 @@ async def main():
             elif isinstance(sub_val, dict):
                 for k, v in sub_val.items():
                     print(f"    {k}: {v}")
-
+                    
     # Obter dados de forma segura para o resumo
     estado_str = getattr(getattr(mower, "status", None), "description", "Desconhecido")
     bateria_pct = getattr(getattr(mower, "battery", None), "percent", 0)
@@ -97,6 +160,10 @@ async def main():
             f.write(f"- **Estado:** {estado_str}\n")
             f.write(f"- **Bateria:** {bateria_pct}%\n")
             f.write(f"- **Comando Executado:** `{COMMAND}`\n")
+
+    for chave, valor in propriedades.items():
+     nome_pt = TRADUCOES_PROPRIEDADES.get(chave, chave)
+    print(f"  {nome_pt} = {traduzir_valor(valor)}")
 
     await cloud.disconnect()
     print("\nSuccessfully unbound and disconnected.")
