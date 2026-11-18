@@ -38,7 +38,7 @@ TRADUCOES_PROPRIEDADES = {
     "description": "Descrição",
 }
 
-# Função auxiliar para traduzir booleans ou valores comuns (opcional)
+# Função auxiliar para traduzir booleans ou valores comuns
 def traduzir_valor(valor):
     if valor is True:
         return "Sim"
@@ -47,24 +47,6 @@ def traduzir_valor(valor):
     if valor is None:
         return "N/D"
     return valor
-
-# Exemplo de como iterar e imprimir as propriedades traduzidas
-print("=== PROPRIEDADES DIRETAS DO OBJETO MOWER ===")
-
-# Supondo que tenho um dicionário ou atributos do objeto (ex: mower.__dict__ ou similar)
-# Se estiver a usar a biblioteca pyworxcloud, podes extrair as propriedades principais:
-propriedades = {
-    "acs_enabled": mower.acs_enabled,
-    "area_mowed": mower.area_mowed,
-    "battery": mower.battery,
-    "charging": mower.battery.get("charging") if isinstance(mower.battery, dict) else None,
-    "error": mower.error,
-    # Adiciona as outras propriedades que pretendes mostrar...
-}
-
-for chave, valor in propriedades.items():
-    nome_pt = TRADUCOES_PROPRIEDADES.get(chave, chave)
-    print(f"  {nome_pt} = {traduzir_valor(valor)}")
 
 EMAIL = os.environ.get("WORX_EMAIL")
 PASSWORD = os.environ.get("WORX_PASSWORD")
@@ -124,8 +106,22 @@ async def main():
     # The sleep() method assures that the MQTT message is sent before closing
     await asyncio.sleep(3)
 
-    # Debug: Propriedades do objeto mower
+    # Imprimir propriedades mapeadas do objeto mower de forma segura
     print("=== PROPRIEDADES DIRETAS DO OBJETO MOWER ===")
+    propriedades = {
+        "acs_enabled": getattr(mower, "acs_enabled", None),
+        "area_mowed": getattr(mower, "area_mowed", None),
+        "battery": getattr(mower, "battery", None),
+        "charging": mower.battery.get("charging") if isinstance(getattr(mower, "battery", None), dict) else None,
+        "error": getattr(mower, "error", None),
+    }
+
+    for chave, valor in propriedades.items():
+        nome_pt = TRADUCOES_PROPRIEDADES.get(chave, chave)
+        print(f"  {nome_pt} = {traduzir_valor(valor)}")
+
+    # Debug: Propriedades completas do objeto mower
+    print("\n=== PROPRIEDADES COMPLETAS (DEBUG) ===")
     for attr in dir(mower):
         if not attr.startswith("_"):
             try:
@@ -160,10 +156,6 @@ async def main():
             f.write(f"- **Estado:** {estado_str}\n")
             f.write(f"- **Bateria:** {bateria_pct}%\n")
             f.write(f"- **Comando Executado:** `{COMMAND}`\n")
-
-    for chave, valor in propriedades.items():
-     nome_pt = TRADUCOES_PROPRIEDADES.get(chave, chave)
-    print(f"  {nome_pt} = {traduzir_valor(valor)}")
 
     await cloud.disconnect()
     print("\nSuccessfully unbound and disconnected.")
