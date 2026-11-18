@@ -1,6 +1,5 @@
 import os
 import sys
-import time
 import asyncio
 from pyworxcloud import WorxCloud
 
@@ -18,37 +17,38 @@ async def main():
     cloud = WorxCloud(EMAIL, PASSWORD, "worx")
     
     print("Authenticating in Worx Cloud...")
-    auth = cloud.authenticate()
+    # ATENÇÃO: Adicionado await (se authenticate for async na lib)
+    auth = await cloud.authenticate() 
     if not auth:
         print("Fails Authentication. Checks email and password.")
         sys.exit(1)
 
     await cloud.connect()
-    # Waits until the initial MQTT payload is received
-    time.sleep(3)
+    # Aguarda um pouco para receber o payload inicial MQTT de forma assíncrona
+    await asyncio.sleep(3)
 
     if not cloud.devices:
         print("Zero devices in this account")
         await cloud.disconnect()
         sys.exit(1)
 
-    # Selects robot by the 1st available name
+    # Selects robot by the 1st available name (Removido o await indevido no dicionário)
     mower = None
     if DEVICE_NAME and DEVICE_NAME in cloud.devices:
-        mower = await cloud.devices[DEVICE_NAME]
+        mower = cloud.devices[DEVICE_NAME]
     else:
         first_key = list(cloud.devices.keys())[0]
-        mower = await cloud.devices[first_key]
+        mower = cloud.devices[first_key]
 
     print(f"Connected to the device: {mower.name} (Model: {mower.model})")
     print(f"Current Status: {mower.status.description} | Bateria: {mower.battery.percent}%")
 
-    # Execução de comandos
+    # Execução de comandos (Adicionados os awaits em falta)
     if COMMAND == "status":
         print("Status read-only request. Finished.")
     elif COMMAND == "start":
         print("Sending command: START (Begins to mow)...")
-        cloud.start(mower.serial_number)
+        await cloud.start(mower.serial_number)
     elif COMMAND == "pause":
         print("Sending command: PAUSE (stops)...")
         await cloud.pause(mower.serial_number)
@@ -58,10 +58,10 @@ async def main():
     else:
         print(f"Comando '{COMMAND}' desconhecido. Usa: status, start, pause ou home.")
 
-    # Enough time for the MQTT message to be sent before closing the connection
-    time.sleep(3)
+    # Tempo para garantir que a mensagem MQTT é enviada antes de fechar
+    await asyncio.sleep(3)
     await cloud.disconnect()
     print("Successfully unbound.")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
