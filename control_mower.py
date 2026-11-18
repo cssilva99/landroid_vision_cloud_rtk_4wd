@@ -59,10 +59,19 @@ async def main():
     else:
         print(f"Comando '{COMMAND}' desconhecido. Usa: status, start, pause ou home.")
 
-    # Tempo para garantir que a mensagem MQTT é enviada antes de fechar
+    # The sleep() method assures that the MQTT message is sent before closing
     await asyncio.sleep(3)
     await cloud.disconnect()
     print("Successfully unbound.")
+    summary_file = os.getenv("GITHUB_STEP_SUMMARY")
+
+if summary_file:
+    # Translation to portuguese is directly written to a GitHub file
+    with open(summary_file, "a", encoding="utf-8") as f:
+        f.write("### 🌿 Estado do Landroid Vision RTK\n\n")
+        f.write(f"- **Estado:** {estado_pt}\n")
+        f.write(f"- **Bateria:** {bateria_pct}%\n")
+        f.write(f"- **Erro:** {erro_pt}\n")
 
 if __name__ == "__main__":
     asyncio.run(main())
