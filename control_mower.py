@@ -1,9 +1,11 @@
-import os
-import sys
 import asyncio
 import ast
+from contextlib import redirect_stdout
 import datetime
+import io
+import os
 import re
+import sys
 from zoneinfo import ZoneInfo
 from pyworxcloud import WorxCloud
 
@@ -42,6 +44,7 @@ TRADUCOES_PROPRIEDADES = {
     "description": "Descrição",
 }
 
+
 # Função auxiliar para traduzir booleans ou valores comuns
 def traduzir_valor(valor):
     if valor is True:
@@ -52,6 +55,7 @@ def traduzir_valor(valor):
         return "N/D"
     return valor
 
+
 EMAIL = os.environ.get("WORX_EMAIL")
 PASSWORD = os.environ.get("WORX_PASSWORD")
 DEVICE_NAME = os.environ.get("WORX_DEVICE_NAME")  # Opcional: caso tenhas mais que um robot
@@ -60,6 +64,8 @@ COMMAND = os.environ.get("MOWER_COMMAND", "status").lower()
 if not EMAIL or not PASSWORD:
     print("Error: Credenciais WORX_EMAIL and WORX_PASSWORD not set.")
     sys.exit(1)
+
+
 def _parse_valor(raw_val: str):
     """Converte strings de representação Python (dicts, ints, bools, datetimes) com segurança."""
     raw_val = raw_val.strip()
@@ -81,9 +87,7 @@ def _parse_valor(raw_val: str):
 
 
 def resumir_robot_para_pai(texto_status: str) -> dict:
-    """
-    Extrai um resumo simples das propriedades do robot corta-relva a partir do output de debug.
-    """
+    """Extrai um resumo simples das propriedades do robot corta-relva a partir do output de debug."""
     dados = {}
     chave_atual = None
     buffer_linhas = []
@@ -131,7 +135,7 @@ def resumir_robot_para_pai(texto_status: str) -> dict:
         "Temperatura bateria (°C)": bateria.get("temperature", "N/D"),
         "Ciclos de bateria": ciclos.get("total", "N/D"),
         "Área cortada (m²)": dados.get("area_mowed", "N/D"),
-        "Horas de lâminas": laminas.get("total_on", "N/D"),
+        "Tempo de lâminas (min)": laminas.get("total_on", "N/D"),
         "Estado / Erro": estado_erro,
         "Versão firmware": firmware.get("version", "N/D"),
         "Última atualização": ultima_atualizacao_str,
@@ -143,13 +147,15 @@ def mostrar_resumo_pai(texto_status: str) -> None:
     print("=== ESTADO DO ROBOT ===")
     for chave, valor in resumo.items():
         print(f"• {chave}: {valor}")
+
+
 async def main():
     # Connection to the Worx Cloud
     cloud = WorxCloud(EMAIL, PASSWORD, "worx")
-    
+
     print("Authenticating in Worx Cloud...")
-    
-    auth = await cloud.authenticate() 
+
+    auth = await cloud.authenticate()
     if not auth:
         print("Fails Authentication. Checks email and password.")
         sys.exit(1)
@@ -163,8 +169,7 @@ async def main():
         await cloud.disconnect()
         sys.exit(1)
 
-    # Selects robot by the 1st available name
-    mower = None
+    # Selects robot by DEVICE_NAME if available, otherwise 1st available device
     if DEVICE_NAME and DEVICE_NAME in cloud.devices:
         mower = cloud.devices[DEVICE_NAME]
     else:
@@ -206,16 +211,21 @@ async def main():
         nome_pt = TRADUCOES_PROPRIEDADES.get(chave, chave)
         print(f"  {nome_pt} = {traduzir_valor(valor)}")
 
-    # Debug: Propriedades completas do objeto mower
+    # Debug: Propriedades completas do objeto mower (também guardado para o resumo)
+    debug_buffer = io.StringIO()
     print("\n=== PROPRIEDADES COMPLETAS (DEBUG) ===")
-    for attr in dir(mower):
-        if not attr.startswith("_"):
-            try:
-                val = getattr(mower, attr)
-                if not callable(val):
-                    print(f"  {attr} = {val}")
-            except Exception:
-                pass
+    with redirect_stdout(debug_buffer):
+        for attr in dir(mower):
+            if not attr.startswith("_"):
+                try:
+                    val = getattr(mower, attr)
+                    if not callable(val):
+                        print(f"  {attr} = {val}")
+                except Exception:
+                    pass
+
+    debug_texto = debug_buffer.getvalue()
+    print(debug_texto, end="")
 
     print("\n=== EXPLORAÇÃO DE SUB-OBJETOS COMUNS ===")
     sub_objects = ["status", "battery", "schedules", "raw", "data", "capabilities"]
@@ -229,10 +239,20 @@ async def main():
             elif isinstance(sub_val, dict):
                 for k, v in sub_val.items():
                     print(f"    {k}: {v}")
-                    
+
     # Obter dados de forma segura para o resumo
-    estado_str = getattr(getattr(mower, "status", None), "description", "Desconhecido")
-    bateria_pct = getattr(getattr(mower, "battery", None), "percent", 0)
+    status_obj = getattr(mower, "status", None)
+    battery_obj = getattr(mower, "battery", None)
+
+    if isinstance(status_obj, dict):
+        estado_str = status_obj.get("description", "Desconhecido")
+    else:
+        estado_str = getattr(status_obj, "description", "Desconhecido")
+
+    if isinstance(battery_obj, dict):
+        bateria_pct = battery_obj.get("percent", 0)
+    else:
+        bateria_pct = getattr(battery_obj, "percent", 0)
 
     # Escrever no GitHub Step Summary se executado em Actions
     summary_file = os.getenv("GITHUB_STEP_SUMMARY")
@@ -243,11 +263,13 @@ async def main():
             f.write(f"- **Bateria:** {bateria_pct}%\n")
             f.write(f"- **Comando Executado:** `{COMMAND}`\n")
 
+    # Mostra o resumo simples a partir do output de debug recolhido
+    print()
+    mostrar_resumo_pai(debug_texto)
 
-# Exemplo de utilização com a tua variável `response`:
-# mostrar_resumo_pai(response)
     await cloud.disconnect()
     print("\nSuccessfully unbound and disconnected.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
