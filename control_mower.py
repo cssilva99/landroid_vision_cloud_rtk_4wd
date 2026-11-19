@@ -1,6 +1,10 @@
 import os
 import sys
 import asyncio
+import ast
+import datetime
+import re
+from zoneinfo import ZoneInfo
 from pyworxcloud import WorxCloud
 
 # Dicionário de tradução para as chaves do Landroid
@@ -56,7 +60,89 @@ COMMAND = os.environ.get("MOWER_COMMAND", "status").lower()
 if not EMAIL or not PASSWORD:
     print("Error: Credenciais WORX_EMAIL and WORX_PASSWORD not set.")
     sys.exit(1)
+def _parse_valor(raw_val: str):
+    """Converte strings de representação Python (dicts, ints, bools, datetimes) com segurança."""
+    raw_val = raw_val.strip()
+    if raw_val == "None":
+        return None
+    if raw_val.startswith("<") and raw_val.endswith(">"):
+        return raw_val
+    try:
+        return eval(
+            raw_val,
+            {"__builtins__": {}},
+            {"datetime": datetime.datetime, "ZoneInfo": ZoneInfo},
+        )
+    except Exception:
+        try:
+            return ast.literal_eval(raw_val)
+        except Exception:
+            return raw_val
 
+
+def resumir_robot_para_pai(texto_status: str) -> dict:
+    """
+    Extrai um resumo simples das propriedades do robot corta-relva a partir do output de debug.
+    """
+    dados = {}
+    chave_atual = None
+    buffer_linhas = []
+
+    for linha in texto_status.splitlines():
+        if linha.startswith("Status read-only request") or linha.startswith("==="):
+            continue
+
+        # Deteta início de uma nova propriedade no bloco DEBUG: "  nome_prop = valor"
+        match = re.match(r"^  ([a-zA-Z0-9_]+) = (.*)$", linha)
+        if match:
+            if chave_atual is not None:
+                dados[chave_atual] = _parse_valor("\n".join(buffer_linhas))
+            chave_atual = match.group(1)
+            buffer_linhas = [match.group(2)]
+        elif chave_atual is not None:
+            # Continuação de linhas multi-linha (ex.: last_status cortado ou longo)
+            buffer_linhas.append(linha)
+
+    if chave_atual is not None:
+        dados[chave_atual] = _parse_valor("\n".join(buffer_linhas))
+
+    bateria = dados.get("battery") if isinstance(dados.get("battery"), dict) else {}
+    ciclos = bateria.get("cycles") if isinstance(bateria.get("cycles"), dict) else {}
+    laminas = dados.get("blades") if isinstance(dados.get("blades"), dict) else {}
+    erro = dados.get("error") if isinstance(dados.get("error"), dict) else {}
+    firmware = dados.get("firmware") if isinstance(dados.get("firmware"), dict) else {}
+    last_status = dados.get("last_status") if isinstance(dados.get("last_status"), dict) else {}
+
+    ultima_atualizacao = last_status.get("timestamp")
+    if isinstance(ultima_atualizacao, datetime.datetime):
+        ultima_atualizacao_str = ultima_atualizacao.strftime("%d/%m/%Y %H:%M")
+    else:
+        ultima_atualizacao_str = "N/D"
+
+    descricao_erro = erro.get("description", "Desconhecido")
+    if erro.get("id") == 0 and str(descricao_erro).lower() == "no error":
+        estado_erro = "Sem erros"
+    else:
+        estado_erro = f"{descricao_erro} (código {erro.get('id')})"
+
+    return {
+        "Bateria (%)": bateria.get("percent", "N/D"),
+        "A carregar": "Sim" if bateria.get("charging") else "Não",
+        "Temperatura bateria (°C)": bateria.get("temperature", "N/D"),
+        "Ciclos de bateria": ciclos.get("total", "N/D"),
+        "Área cortada (m²)": dados.get("area_mowed", "N/D"),
+        "Horas de lâminas": laminas.get("total_on", "N/D"),
+        "Estado / Erro": estado_erro,
+        "Versão firmware": firmware.get("version", "N/D"),
+        "Última atualização": ultima_atualizacao_str,
+    }
+
+
+def mostrar_resumo_pai(texto_status: str) -> None:
+    resumo = resumir_robot_para_pai(texto_status)
+    print("=== ESTADO DO ROBOT ===")
+    for chave, valor in resumo.items():
+        print(f"• {chave}: {valor}")
 async def main():
     # Connection to the Worx Cloud
     cloud = WorxCloud(EMAIL, PASSWORD, "worx")
@@ -157,6 +243,9 @@ async def main():
             f.write(f"- **Bateria:** {bateria_pct}%\n")
             f.write(f"- **Comando Executado:** `{COMMAND}`\n")
 
+
+# Exemplo de utilização com a tua variável `response`:
+# mostrar_resumo_pai(response)
     await cloud.disconnect()
     print("\nSuccessfully unbound and disconnected.")
 
